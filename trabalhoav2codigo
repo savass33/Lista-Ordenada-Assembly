@@ -1,0 +1,208 @@
+# Definição de registradores e aliases
+.eqv num $s0
+.eqv char $s1
+.eqv digito $s2
+.eqv i $t0
+.eqv k $t1
+.eqv flag $t2
+.eqv index_num $t8
+.eqv index_lista $t9
+.eqv quociente $s6
+.eqv resto $s7
+
+.data
+arquivo_entrada:       .asciiz "lista.txt"          # Nome do arquivo de entrada
+arquivo_saida:         .asciiz "lista_ordenada.txt" # Nome do arquivo de saída
+buffer_entrada:        .space 1024                  # Espaço para armazenar os dados lidos
+buffer_saida:          .space 1024                  # Espaço para armazenar os dados convertidos
+.align 2                                           # Alinhamento do espaço de dados
+vet_num:               .space 600                   # Vetor para armazenar números
+vet_char: 		.space 1024
+delimitador:           .asciiz ","                  # Delimitador usado na saída
+
+
+.text
+
+    # --- Passo 1: Abrir e ler o arquivo lista.txt ---
+    li $v0, 13                            # Chamada de serviço para abrir um arquivo
+    la $a0, arquivo_entrada               # Carrega o nome do arquivo em $a0
+    li $a1, 0                             # Modo de leitura (0)
+    syscall                                # Executa a chamada de sistema
+    move $t5, $v0                         # Guarda o file descriptor em $t5
+
+    # Ler o conteúdo do arquivo no buffer_entrada
+    move $a0, $t5                         # Passa o file descriptor
+    li $v0, 14                            # Chamada de serviço para ler do arquivo
+    la $a1, buffer_entrada                # Endereço do buffer onde os dados serão armazenados
+    li $a2, 1024                          # Tamanho a ser lido
+    syscall                                # Executa a chamada de sistema
+    move k, $v0                           # Guarda a quantidade de bytes lidos em 'k'
+
+    # --- Passo 2: Transformar string em números inteiros ---
+    li i, 0                                # Inicializa o índice 'i' como 0
+    li k, 0                                # Inicializa o índice 'k' como 0
+    li $t3, 100                            # Define um limite máximo de números
+
+loop_lista:                                 # Início do loop para processar a lista
+    li num, 0                              # Reseta 'num' para o próximo número
+    li flag, 1                             # Define flag como 1 (positivo)
+
+loop_interno:                               # Início do loop interno para leitura de caracteres
+    lb char, buffer_entrada(i)            # Lê um byte do buffer
+    beqz char, armazena                   # Se for zero (final da string), armazena o número
+    beq char, ',', armazena               # Se encontrar uma vírgula, armazena o número
+    beq char, '-', negativo                # Se encontrar um '-', trata como número negativo
+
+converte:                                   # Se o caractere for um dígito
+    sub digito, char, 0x30                # Converte o caractere ASCII para seu valor numérico
+    mul $t3, num, 10                       # Multiplica o número atual por 10
+    add num, $t3, digito                   # Adiciona o dígito ao número atual
+    addi i, i, 1                            # Avança para o próximo caractere
+    j loop_interno                          # Retorna ao início do loop interno
+
+negativo:                                   # Tratamento para números negativos
+    li flag, -1                            # Define flag como -1 (negativo)
+    addi i, i, 1                           # Avança para o próximo caractere
+    j loop_interno                          # Retorna ao início do loop interno
+
+armazena:                                   # Armazenamento do número processado
+    mul num, num, flag                     # Aplica o sinal ao número
+    sw num, vet_num(k)                     # Armazena o número no vetor
+    addi k, k, 4                            # Avança para a próxima posição no vetor
+    li flag, 1                              # Reseta a flag para positivo
+    addi i, i, 1                            # Avança para o próximo caractere
+
+    # Se chegamos ao final da string, termina o loop
+    beqz char, ordena                      # Se o caractere é zero, pula para ordenação
+    blt k, 400, loop_lista                 # Verifica se não excede o tamanho do vetor
+
+    # --- Passo 3: Ordenar os valores com Bubble Sort ---
+ordena:                                      # Início da ordenação
+    li $t4, 1                                # Inicializa a flag de troca para Bubble Sort
+
+bubble_sort_externo:                         # Início do loop externo do Bubble Sort
+    li $t4, 0                                # Reseta a flag de troca
+    la $t5, vet_num                          # Carrega o endereço do vetor
+    li $t6, 400                               # Número de elementos a serem ordenados
+
+bubble_sort_interno:                         # Início do loop interno do Bubble Sort
+    lw i, 0($t5)                            # Carrega o número atual do vetor
+    lw k, 4($t5)                            # Carrega o próximo número do vetor
+    ble i, k, proximo                        # Se i <= k, vai para o próximo número
+
+    # Troca os números
+    sw k, 0($t5)                            # Armazena k na posição de i
+    sw i, 4($t5)                            # Armazena i na posição de k
+    li $t4, 1                                # Indica que houve uma troca
+
+proximo:                                      # Avança para o próximo par de números
+    addi $t5, $t5, 4                        # Avança no vetor
+    sub $t6, $t6, 4                          # Decrementa o contador de números restantes
+    bgtz $t6, bubble_sort_interno            # Continua o loop interno se ainda há números a comparar
+
+    bne $t4, 0, bubble_sort_externo         # Se houve troca, repete o loop externo
+
+
+    # --- Passo 4: Imprimir a lista ordenada (DEBUG --> tirar depois) ---
+    li i, 0                                  # Zera o índice do vetor
+    li $t4, 100                              # Define quantos números foram lidos
+
+imprimir_loop:                               # Início do loop de impressão
+    lw num, vet_num(i)                      # Carrega o número do vetor
+    li $v0, 1                                # Serviço para imprimir inteiro
+    move $a0, num                            # Passa o número para o registrador de argumento
+    syscall                                  # Executa a chamada de sistema para imprimir o número
+
+    # Imprime a vírgula, se não for o último número
+    addi $t4, $t4, -1                        # Decrementa o contador de números restantes
+    bgtz $t4, imprimir_delimitador           # Se ainda há números, imprime a vírgula
+
+    j imprimir_fim                           # Se for o último número, pula para o fim
+
+imprimir_delimitador:                        # Imprime a vírgula
+    li $v0, 11                               # Serviço para imprimir caractere
+    li $a0, ','                              # Caractere a ser impresso
+    syscall                                   # Executa a chamada de sistema
+
+    addi i, i, 4                             # Avança para o próximo número
+    j imprimir_loop                           # Continua o loop de impressão
+
+imprimir_fim:                                # Finaliza a impressão
+    li $v0, 11                               # Serviço para imprimir caractere
+    li $a0, '\n'                             # Caractere de nova linha
+    syscall                                   # Executa a chamada de sistema
+
+
+
+# --- Passo 5: Salvar o Vetor Ordenado em "lista_ordenada.txt" ---
+	li index_lista, 0           # Inicializa o índice da lista
+	li index_num, 0             # Inicializa o índice do vetor de números
+
+loop_inicio:
+    li flag, 0              # Reinicializa a flag para sinal
+    li k, 0                 # Reseta k para uso no buffer
+
+verifica_sinal: 
+    beq index_num, 400, escrita # Compara se o índice é igual ao tamanho
+    lw num, vet_num(index_num)  # Carrega o número do vetor
+    add index_num, index_num, 4  # Incrementa o índice do vetor
+    bge num, $zero, converte_digito # Se negativo, vai para a conversão
+    li flag, 1               # Marca como negativo
+    mul num, num, -1         # Converte para positivo
+
+converte_digito: 
+    move digito, num
+
+proximo_digito:
+    li $t7, 10
+    div digito, $t7           # Divide por 10
+    mfhi resto
+    mflo digito
+    add char, resto, 0x30
+    sb char, buffer_saida(k)  # Armazena o caractere
+    add k, k, 1               # Incrementa o índice do buffer
+    bnez digito, proximo_digito # Continua enquanto digito não for zero
+
+    # Adiciona sinal negativo, se necessário
+    beqz flag, ordena_digitos  # Se positivo, passa para a ordenação
+    li $t7, '-'               # Para negativo
+    sb $t7, buffer_saida(k)   # Armazena o sinal no buffer
+    add k, k, 1                # Incrementa o índice do buffer
+
+ordena_digitos:
+    beqz k, add_virgula         # Se k é zero, sai do loop
+    addi k, k, -1              # Decrementa o índice do buffer
+    lb char, buffer_saida(k)    # Carrega o caractere
+    sb char, vet_char(index_lista) # Armazena em vet_char
+    add index_lista, index_lista, 1  # Incrementa o índice da lista
+    j ordena_digitos            # Repete a inversão
+
+add_virgula:
+    li $t7, ','                 # Adiciona vírgula ao final do número
+    sb $t7, vet_char(index_lista)
+    add index_lista, index_lista, 1
+    j loop_inicio                   # Volta para processar o próximo número
+
+escrita:
+    # Abre o arquivo para escrita
+    li $v0, 13
+    la $a0, arquivo_saida
+    li $a1, 1                   # Modo de escrita
+    syscall
+
+leitura:
+    move $s7, $v0               # Salva file descriptor
+    li $v0, 15                   # Syscall para escrever
+    move $a0, $s7                # File descriptor
+    la $a1, vet_char          # Endereço do buffer
+    move $a2, index_lista       # Número de bytes a escrever
+    syscall
+
+    # Fecha o arquivo de saída
+    li $v0, 16                   # Syscall para fechar arquivo
+    move $a0, $s7                # File descriptor
+    syscall
+
+fim: 
+    li $v0, 10                   # Termina o programa
+    syscall
