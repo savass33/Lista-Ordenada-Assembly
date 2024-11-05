@@ -7,7 +7,6 @@
 .eqv flag $t2
 .eqv index_num $t8
 .eqv index_lista $t9
-.eqv quociente $s6
 .eqv resto $s7
 
 .data
@@ -28,6 +27,7 @@ delimitador:           .asciiz ","                  # Delimitador usado na saída
     la $a0, arquivo_entrada               # Carrega o nome do arquivo em $a0
     li $a1, 0                             # Modo de leitura (0)
     syscall                                # Executa a chamada de sistema
+					 #A syscall 13 é usada para abrir o arquivo, com $a0 carregando o endereço do nome do arquivo e $a1 o modo.
     move $t5, $v0                         # Guarda o file descriptor em $t5
 
     # Ler o conteúdo do arquivo no buffer_entrada
@@ -74,7 +74,9 @@ armazena:                                   # Armazenamento do número processado
 
     # Se chegamos ao final da string, termina o loop
     beqz char, ordena                      # Se o caractere é zero, pula para ordenação
-    blt k, 400, loop_lista                 # Verifica se não excede o tamanho do vetor
+     blt k, 400, loop_lista  		   # Se o índice 'k' é menor que 400, continua o loop para ler e converter o próximo número;
+                           		   # caso contrário, sai do loop para evitar ultrapassar o limite do vetor 'vet_num'.
+
 
     # --- Passo 3: Ordenar os valores com Bubble Sort ---
 ordena:                                      # Início da ordenação
@@ -88,7 +90,7 @@ bubble_sort_externo:                         # Início do loop externo do Bubble 
 bubble_sort_interno:                         # Início do loop interno do Bubble Sort
     lw i, 0($t5)                            # Carrega o número atual do vetor
     lw k, 4($t5)                            # Carrega o próximo número do vetor
-    ble i, k, proximo                        # Se i <= k, vai para o próximo número
+    ble i, k, proximo                        # Se i <= k, vai para o próximo número, se não troca
 
     # Troca os números
     sw k, 0($t5)                            # Armazena k na posição de i
@@ -100,7 +102,7 @@ proximo:                                      # Avança para o próximo par de núm
     sub $t6, $t6, 4                          # Decrementa o contador de números restantes
     bgtz $t6, bubble_sort_interno            # Continua o loop interno se ainda há números a comparar
 
-    bne $t4, 0, bubble_sort_externo         # Se houve troca, repete o loop externo
+    bne $t4, 0, bubble_sort_externo         # Se houve troca, repete o loop externo // Se a flag for diferente 0, houve troca então o loop repete
 
 
     # --- Passo 4: Imprimir a lista ordenada (DEBUG --> tirar depois) ---
@@ -135,7 +137,7 @@ imprimir_fim:                                # Finaliza a impressão
 
 
 # --- Passo 5: Salvar o Vetor Ordenado em "lista_ordenada.txt" ---
-	li index_lista, 0           # Inicializa o índice da lista
+	li index_lista, 0           # Inicializa o índice do vet_char
 	li index_num, 0             # Inicializa o índice do vetor de números
 
 loop_inicio:
@@ -158,10 +160,10 @@ proximo_digito:
     div digito, $t7           # Divide por 10
     mfhi resto
     mflo digito
-    add char, resto, 0x30
+    add char, resto, 0x30	#Conversão para ASCII
     sb char, buffer_saida(k)  # Armazena o caractere
     add k, k, 1               # Incrementa o índice do buffer
-    bnez digito, proximo_digito # Continua enquanto digito não for zero
+    bnez digito, proximo_digito # Continua enquanto digito(quociente) não for zero
 
     # Adiciona sinal negativo, se necessário
     beqz flag, ordena_digitos  # Se positivo, passa para a ordenação
@@ -178,8 +180,9 @@ ordena_digitos:
     j ordena_digitos            # Repete a inversão
 
 add_virgula:
+    beq index_num, 400, escrita # Compara se o índice é igual ao tamanho
     li $t7, ','                 # Adiciona vírgula ao final do número
-    sb $t7, vet_char(index_lista)
+    sb $t7, vet_char(index_lista) # Salva o valor armazenado em $t7 no vetor vet_char, na posição indicada por index_lista
     add index_lista, index_lista, 1
     j loop_inicio                   # Volta para processar o próximo número
 
